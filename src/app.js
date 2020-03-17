@@ -4,6 +4,7 @@ const express = require('express')
 const app     = express()
 const server  = require('http').createServer(app)
 const io      = require('socket.io').listen(server)
+const request = require('request')
 
 const Redis = require('./utils/redis')
 const ManipulateString = require('./helpers/manipulate-string')
@@ -22,7 +23,9 @@ const Waitlist = new WaitlistService({
 
 const connections = []
 
-
+const dirQueue = []
+let dataKey = []
+let keys
 io.sockets.on(`connection`,socket => {
   connections.push(socket)
   console.log(`socket connected : ${connections.length}`)
@@ -30,6 +33,7 @@ io.sockets.on(`connection`,socket => {
   socket.on('disconnect',(data) => {
     connections.splice(connections.indexOf(socket),1)
     console.log(`socket disconnect ${connections.length}`)
+    
   })  
   
   socket.on('deleteGrantAccess', async data => {
@@ -37,18 +41,69 @@ io.sockets.on(`connection`,socket => {
     // await Waitlist.checkGrantAccessIsExpired(data)
     let manipulateKeys = ManipulateString.changeText({text: data.redisKey,to : 'waitinglist:queue'});
     let newGranted = await Waitlist.addToGrantAccess(data)
-    socket.emit('onDeleteGrantAccess',{ ...data })
+    socket.emit('onDeleteGrantAccess',{ ...data }) 
     socket.emit('checkPosition',{redisKey: manipulateKeys})
     socket.broadcast.emit('checkPosition',{redisKey: manipulateKeys})
     socket.broadcast.emit('onDeleteGrantAccess',{ redisKey : manipulateKeys, granted : newGranted})
+    // console.log({manipulateKeys, newGranted,redisKey : data.redisKey});
+    
+  })
+  socket.on('checkPosition', async data => {
+    let list = await Waitlist.checkPosition(data)
+    let position = list.indexOf(data.key) + 1
+    let times = (data.time * 60 * position)
+    socket.emit('onCheckPosition',list)
+    socket.broadcast.emit('onCheckPosition',list)
+  })
+  socket.on('checkGrantedExpire', async data => {
+    let list = await Redis.findAll(data.redisKey)
+    let timeExp = list !== undefined ? Object.values(list) : []
+    let keys = list !== undefined ? Object.keys(list) : []
+    let timeNow = new Date(data.timeNow).getTime()
+    let result
+    if(keys !== null) {
+      for (let i = 0; i < timeExp.length; i++) {
+        let time = new Date(timeExp[i]).getTime()
+        if(timeNow >= time) {
+          result = await Redis.destroy({redisKey: data.redisKey, key: keys[i]})
+        }
+      }
+    }
+    return result;
   })
 
-  socket.on('checkPosition', async data => {
-    let position = await Waitlist.checkPosition(data)
-    socket.emit('onCheckPosition',position)
-    socket.broadcast.emit('onCheckPosition',position)
+  const listData = async (redisKey) => {
+    let data = await Redis.findAll(redisKey)
+    let key = Object.keys(data)
+    for (let i = 0; i < dirQueue.length; i++) {
+      const element = dirQueue[i];
+      const find = key.find(el => el !== element)
+      dataKey.push(find)
+    }
+    return false
+  }
+  listData(keys)
+
+  const resetUser = async () => {
+    let result
+    for (let i = 0; i < dataKey.length; i++) {
+      const element = dataKey[i];
+      result = await Redis.destroy({redisKey: keys, key: element})
+    }
+    return result
+  }
+  
+  let interval = setInterval(resetUser, 10000);
+  socket.on('checkUser', data => {
+    dirQueue.push(data.key)
+    keys = data.redisKey
+    if(data !== undefined) {
+      clearInterval(interval)
+      interval = setInterval(resetUser, 10000)
+    }
   })
 })
+
 
 server.listen(PORT , async () => {
     console.log(`Server running port ${PORT}`)
