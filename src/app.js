@@ -65,44 +65,6 @@ io.sockets.on(`connection`,socket => {
     }
     return result;
   })
-
-  // const listData = async (redisKey) => {
-  //   let data = await Redis.findAll(redisKey)
-  //   let key = Object.keys(data)
-  //   for (let i = 0; i < dirQueue.length; i++) {
-  //     const element = dirQueue[i];
-  //     const find = key.find(el => el !== element)
-  //     dataKey.push(find)
-  //   }
-  //   return false
-  // }
-  
-  // const resetUser = async () => {
-  //   let result
-  //   for (let i = 0; i < dataKey.length; i++) {
-  //     const element = dataKey[i];
-  //     result = await Redis.destroy({redisKey: keys, key: element})
-  //   }
-  //   return result
-  // }
-  
-  // let interval = setInterval(resetUser, 10000);
-  // socket.on('checkUser', async data => {
-  //   dirQueue.push(data.key)
-  //   keys = data.redisKey
-  //   let datas = await Redis.findAll(data.redisKey)
-  //   let key = Object.keys(datas)
-  //   for (let i = 0; i < dirQueue.length; i++) {
-  //     const element = dirQueue[i];
-  //     const find = key.find(el => el !== element)
-  //     dataKey.push(find)
-  //   }
-  //   // await listData(data.redisKey)
-  //   if(data !== undefined) {
-  //     clearInterval(interval)
-  //     interval = setInterval(resetUser, 10000)
-  //   }
-  // })
 })
 
 
